@@ -1,5 +1,8 @@
 # parse3MF
 
+[![npm version](https://img.shields.io/npm/v/parse3mf.svg)](https://www.npmjs.com/package/parse3mf)
+[![license](https://img.shields.io/npm/l/parse3mf.svg)](https://github.com/OG-Baklava/parse3MF/blob/main/LICENSE)
+
 Drop-in **3MF file parser**, **multicolor 3D model viewer**, and **color-safe exporter** for React.
 
 Slicer-accurate colour detection for **Bambu Studio**, **PrusaSlicer**, **Cura**, and any slicer following the 3MF Core Specification. Built for print-on-demand services that need clients to preview, configure colours, export modified files, and select plates before sending to print.
