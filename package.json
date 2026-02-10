@@ -1,0 +1,78 @@
+{
+  "name": "parse3mf",
+  "version": "1.0.0",
+  "description": "Drop-in 3MF file parser and multicolor 3D model viewer for React. Slicer-accurate color detection for Bambu Studio and PrusaSlicer files.",
+  "author": "OG-Baklava",
+  "license": "MIT",
+  "keywords": [
+    "3mf",
+    "3d-printing",
+    "react",
+    "three.js",
+    "multicolor",
+    "slicer",
+    "bambu-studio",
+    "prusaslicer",
+    "model-viewer",
+    "parser",
+    "3mf-parser",
+    "print-on-demand"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OG-Baklava/parse3MF.git"
+  },
+  "homepage": "https://github.com/OG-Baklava/parse3MF#readme",
+  "bugs": {
+    "url": "https://github.com/OG-Baklava/parse3MF/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "jszip": ">=3.10.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "three": ">=0.150.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/three": "^0.163.0",
+    "jszip": "^3.10.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.163.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.3"
+  }
+}
