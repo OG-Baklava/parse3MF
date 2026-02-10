@@ -1,8 +1,8 @@
 # parse3MF
 
-Drop-in **3MF file parser** and **multicolor 3D model viewer** for React.
+Drop-in **3MF file parser**, **multicolor 3D model viewer**, and **color-safe exporter** for React.
 
-Slicer-accurate colour detection for **Bambu Studio**, **PrusaSlicer**, **Cura**, and any slicer following the 3MF Core Specification. Built for print-on-demand services that need clients to preview, configure colours, and select plates before sending to print.
+Slicer-accurate colour detection for **Bambu Studio**, **PrusaSlicer**, **Cura**, and any slicer following the 3MF Core Specification. Built for print-on-demand services that need clients to preview, configure colours, export modified files, and select plates before sending to print.
 
 ---
 
@@ -10,9 +10,10 @@ Slicer-accurate colour detection for **Bambu Studio**, **PrusaSlicer**, **Cura**
 
 - 🎨 **Multicolor rendering** — per-triangle material groups, paint-color decoding, multi-material meshes
 - 🖨️ **Slicer parity** — reads `paint_color`, `mmu_segmentation`, filament configs, extruder assignments, plates
+- 💾 **Production-safe export** — save modified .3MF files with only colour values changed, preserving all geometry and print settings
 - 🧩 **Plug & play** — one `<ThreeMFWorkbench>` component and you're done
-- 🔧 **Composable** — use `<Viewer>`, `<ColorPicker>`, `<PlateSelector>` individually with full control
-- 📦 **Headless mode** — `parse3MF()` works without React (Node.js / web workers)
+- 🔧 **Composable** — use `<Viewer>`, `<ColorPicker>`, `<PlateSelector>`, `<SaveButton>` individually with full control
+- 📦 **Headless mode** — `parse3MF()` and `export3MF()` work without React (Node.js / web workers)
 - 🎭 **Themeable** — full control over colours, fonts, borders via props
 - 🪶 **Zero CSS imports** — all styles are inline, works in any project
 
@@ -52,6 +53,7 @@ export default function App() {
       />
       <ThreeMFWorkbench
         file={file}
+        showSaveButton
         onParsed={(result) => {
           console.log('Volume:', result.volume, 'cm³')
           console.log('Multi-color:', result.isMultiColor)
@@ -59,6 +61,9 @@ export default function App() {
         }}
         onSlotColorChange={(slotId, color, allSlots) => {
           console.log(`Slot ${slotId} → ${color}`)
+        }}
+        onExported={(blob) => {
+          console.log('Exported .3MF:', blob.size, 'bytes')
         }}
       />
     </div>
@@ -75,6 +80,7 @@ import {
   Viewer,
   ColorPicker,
   PlateSelector,
+  SaveButton,
 } from 'parse3mf'
 
 function UploadButton() {
@@ -120,6 +126,7 @@ export default function App() {
         <div style={{ width: 260 }}>
           <PlateSelector />
           <ColorPicker />
+          <SaveButton />
         </div>
       </div>
     </ThreeMFProvider>
@@ -141,6 +148,33 @@ console.log(result.geometries.length)   // 3
 console.log(result.plates)              // [{ id: 1, name: 'Plate 1', objectIds: [1,2,3] }]
 ```
 
+### Export only (no React)
+
+```ts
+import { parse3MF, export3MF, download3MF } from 'parse3mf/core'
+
+// Parse
+const result = await parse3MF(file)
+
+// Modify colours
+const updatedSlots = result.materialSlots.map((slot, i) =>
+  i === 0 ? { ...slot, selectedColor: '#EF4444' } : slot
+)
+
+// Export as Blob
+const blob = await export3MF({
+  originalFile: file,
+  materialSlots: updatedSlots,
+})
+
+// Or trigger a browser download directly
+await download3MF({
+  originalFile: file,
+  materialSlots: updatedSlots,
+  filename: 'my-model-recolored',
+})
+```
+
 ---
 
 ## API Reference
@@ -149,11 +183,12 @@ console.log(result.plates)              // [{ id: 1, name: 'Plate 1', objectIds:
 
 | Component | Description |
 |---|---|
-| `<ThreeMFWorkbench>` | All-in-one: viewport + sidebar (wraps its own Provider) |
+| `<ThreeMFWorkbench>` | All-in-one: viewport + sidebar + save button (wraps its own Provider) |
 | `<ThreeMFProvider>` | Context provider — wrap your app to share state |
 | `<Viewer>` | 3D viewport — renders the parsed model with Three.js |
 | `<ColorPicker>` | Colour selection dropdown per material slot |
 | `<PlateSelector>` | Plate dropdown (only visible for multi-plate files) |
+| `<SaveButton>` | Export/download button — auto-disables when no colours changed |
 
 ### Hook
 
@@ -162,16 +197,20 @@ const {
   // State
   model,              // ParsedThreeMF | null
   loading,            // boolean
+  exporting,          // boolean
   error,              // Error | null
   materialSlots,      // MaterialSlot[]
   selectedPlateId,    // number | null
   isMultiColor,       // boolean
+  hasColorChanges,    // boolean
 
   // Actions
   loadFile,           // (file: File) => Promise<ParsedThreeMF | null>
   setSlotColor,       // (slotId: string, color: string) => void
   selectPlate,        // (plateId: number | null) => void
   setColor,           // (color: string) => void
+  exportFile,         // (colorOptions?) => Promise<Blob | null>
+  downloadFile,       // (filename?, colorOptions?) => Promise<void>
   reset,              // () => void
 
   // Derived
@@ -184,10 +223,17 @@ const {
 } = useThreeMF()
 ```
 
-### Core function
+### Core functions
 
 ```ts
+// Parse a .3MF file
 async function parse3MF(file: File): Promise<ParsedThreeMF>
+
+// Export with modified colours (returns Blob)
+async function export3MF(options: Export3MFOptions): Promise<Blob>
+
+// Export and trigger browser download
+async function download3MF(options: Export3MFOptions): Promise<void>
 ```
 
 ### Key types
@@ -213,7 +259,44 @@ interface MaterialSlot {
   objectIds: number[]     // Geometry indices
   selectedColor: string   // Current colour pick
 }
+
+interface Export3MFOptions {
+  originalFile: File | Blob | ArrayBuffer
+  materialSlots: MaterialSlot[]
+  colorOptions?: ColorOption[]
+  filename?: string
+}
+
+interface ColorOption {
+  name: string            // e.g. 'PLA Red'
+  hex: string             // e.g. '#cc0000'
+}
 ```
+
+---
+
+## Exporting Modified .3MF Files
+
+The exporter is designed for **production 3D printing workflows** where file integrity is critical. It uses **surgical string replacement** — only the exact colour hex values inside known fields are changed. Everything else (geometry, print settings, G-code metadata, calibration data) is preserved byte-for-byte.
+
+### What gets patched
+
+| Source | Fields |
+|---|---|
+| Model XML (`3D/*.model`) | `displaycolor` on `<base>`, `color` on `<color>` |
+| `project_settings.config` | `filament_colour` / `filament_color` (JSON array or INI line) |
+| `slice_info.config` | `color` on `<filament>` elements |
+| PrusaSlicer configs | `extruder_colour` / `filament_colour` lines |
+
+### Safety guarantees
+
+- No DOM re-serialization — no `XMLSerializer`, no `JSON.stringify`
+- Alpha suffixes preserved — `#FF0000FF` → `#3B82F6FF`
+- No-change passthrough — returns original bytes if nothing was modified
+- Untouched files stay untouched — only files with actual changes are re-written in the ZIP
+- Cross-references config and XML colours positionally to handle hex mismatches between sources
+
+> For full exporter internals, see [`docs/EXPORTER.md`](docs/EXPORTER.md).
 
 ---
 
@@ -252,6 +335,8 @@ Or provide custom colour options:
 
 ## How It Works
 
+### Parsing
+
 1. **ZIP extraction** — JSZip opens the .3MF (which is a ZIP archive)
 2. **XML parsing** — DOMParser reads `3D/3dmodel.model` + external objects
 3. **Resource resolution** — `<basematerials>`, `<colorgroup>` → colour lookup table
@@ -260,6 +345,13 @@ Or provide custom colour options:
 6. **Paint decoding** — `paint_color` hex attributes → per-triangle extruder states via bit-packed quadtree
 7. **Geometry creation** — `BufferGeometry` with sorted index buffer for multi-material groups
 8. **Three.js rendering** — 3-effect architecture: scene bootstrap → mesh build → colour update
+
+### Exporting
+
+1. **Remap construction** — compares each slot's current colour to its original
+2. **Cross-referencing** — maps config filament colours to XML basematerials by position
+3. **Surgical patching** — regex-based replacement of hex values in specific fields only
+4. **ZIP re-packaging** — only modified files are written back; everything else is preserved
 
 ### Multicolor Detection Chain
 
@@ -274,25 +366,37 @@ The parser checks for multicolor in this order:
 7. Component-level `pid`/`pindex` applied to external objects
 8. External object ID remapping with composite map fixup
 
+> For full parser internals, see [`docs/3MF_PIPELINE_ARCHITECTURE.md`](docs/3MF_PIPELINE_ARCHITECTURE.md).
+
 ---
 
 ## Supported Slicers
 
-| Slicer | Multicolor | Plates | Paint Data |
-|---|:---:|:---:|:---:|
-| Bambu Studio | ✅ | ✅ | ✅ |
-| PrusaSlicer | ✅ | — | ✅ |
-| Cura | ✅ | — | — |
-| Generic 3MF | ✅ | — | — |
+| Slicer | Multicolor | Plates | Paint Data | Export |
+|---|:---:|:---:|:---:|:---:|
+| Bambu Studio | ✅ | ✅ | ✅ | ✅ |
+| PrusaSlicer | ✅ | — | ✅ | ✅ |
+| Cura | ✅ | — | — | ✅ |
+| Generic 3MF | ✅ | — | — | ✅ |
 
 ---
 
 ## Use Cases
 
-- **Print-on-demand services** — let clients preview their model, pick colours per filament, and select plates before ordering
+- **Print-on-demand services** — let clients preview their model, pick colours per filament, export modified files, and select plates before ordering
+- **3D print colour configurators** — embed a colour picker that produces production-ready .3MF files with only the chosen colours changed
 - **3D print quoting tools** — extract volume, bounding box, and material slot count for automated pricing
 - **Model preview widgets** — embed a lightweight 3MF viewer in any React app
-- **Slicer pre-processing** — parse and inspect 3MF files before sending to a slicer API
+- **Slicer pre-processing** — parse, inspect, and modify 3MF files before sending to a slicer API
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [`docs/3MF_PIPELINE_ARCHITECTURE.md`](docs/3MF_PIPELINE_ARCHITECTURE.md) | Full parser & renderer architecture, critical invariants, testing checklist |
+| [`docs/EXPORTER.md`](docs/EXPORTER.md) | Exporter design, API reference, cross-referencing, safety guarantees |
 
 ---
 
