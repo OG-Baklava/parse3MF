@@ -403,6 +403,49 @@ The parser checks for multicolor in this order:
 
 ---
 
+## Why parse3mf?
+
+Most 3D file viewers on npm focus on STL files and give you a basic geometry preview. **parse3mf** is the first library purpose-built for 3MF files — the modern standard for 3D printing — with full multi-color support, slicer parity, and a production-safe exporter that doesn't corrupt your files.
+
+If you're building a **3D printing web app**, a **print-on-demand color configurator**, a **quoting tool**, or any workflow that touches `.3mf` files, this library gives you:
+
+- **Parsing that matches your slicer** — Bambu Studio, PrusaSlicer, and Cura all embed multicolor data differently. parse3mf handles all of them.
+- **A React viewer out of the box** — `<ThreeMFWorkbench>` gives you a full 3D viewport with color picker, plate selector, and save button in one line.
+- **Safe file export** — change colors without breaking print settings, geometry, G-code metadata, or calibration data. Production-ready.
+- **Headless mode** — use `parse3MF()` and `export3MF()` in Node.js, web workers, or any non-React environment.
+
+No other npm package does all of this for 3MF files.
+
+---
+
+## FAQ
+
+### Does parse3mf support STL files?
+
+No — parse3mf is specifically built for the **3MF file format**. STL files don't support multicolor data, materials, or plates. If your workflow uses `.3mf` files (which is the default for modern slicers like Bambu Studio and PrusaSlicer), this is the right tool.
+
+### Can I use parse3mf without React?
+
+Yes. Import from `parse3mf/core` to get `parse3MF()` and `export3MF()` — pure async functions with no React dependency. Works in Node.js, Deno, web workers, or any JavaScript runtime.
+
+### Does the exporter change anything other than colors?
+
+No. The exporter uses **surgical string replacement** — it only modifies the exact hex color values in known config and XML fields. All geometry, print settings, G-code metadata, plate definitions, and calibration data are preserved byte-for-byte.
+
+### Which slicers are supported?
+
+**Bambu Studio**, **PrusaSlicer**, **Cura**, and any slicer that follows the **3MF Core Specification**. The parser reads slicer-specific metadata (filament configs, paint data, plate assignments) in addition to standard 3MF resources.
+
+### Can I customize the UI?
+
+Yes. Every component accepts a `theme` prop for full control over colors, fonts, and borders. You can also use individual components (`<Viewer>`, `<ColorPicker>`, `<PlateSelector>`, `<SaveButton>`) separately for complete layout control.
+
+### Is parse3mf free to use?
+
+Yes — MIT licensed, free for personal and commercial use.
+
+---
+
 ## License
 
 MIT — [OG-Baklava](https://github.com/OG-Baklava)

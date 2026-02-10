@@ -1,0 +1,48 @@
+# parse3mf
+
+> Drop-in 3MF file parser, multicolor 3D model viewer, and color-safe exporter for React and Node.js.
+
+parse3mf is an npm library for parsing, viewing, and exporting 3MF files — the modern standard for 3D printing. It provides slicer-accurate multicolor detection for Bambu Studio, PrusaSlicer, and Cura files, a React-based 3D viewer with color picker and plate selector, and a production-safe exporter that modifies only color values while preserving all geometry and print settings.
+
+## Key capabilities
+
+- Parse 3MF files and extract geometry, materials, colors, plates, and volume
+- Render multicolor 3D models in the browser with Three.js
+- Detect multi-material data from Bambu Studio, PrusaSlicer, Cura, and standard 3MF
+- Export modified 3MF files with only color values changed (surgical string replacement)
+- React components: ThreeMFWorkbench, Viewer, ColorPicker, PlateSelector, SaveButton
+- Headless mode: parse3MF() and export3MF() work without React in Node.js or web workers
+- Themeable UI with inline styles (no CSS imports needed)
+
+## Install
+
+npm install parse3mf three jszip
+
+## Quick usage
+
+React (all-in-one):
+  import { ThreeMFWorkbench } from 'parse3mf'
+  <ThreeMFWorkbench file={file} showSaveButton />
+
+Headless (no React):
+  import { parse3MF, export3MF } from 'parse3mf/core'
+  const result = await parse3MF(file)
+  const blob = await export3MF({ originalFile: file, materialSlots: updatedSlots })
+
+## Links
+
+- npm: https://www.npmjs.com/package/parse3mf
+- GitHub: https://github.com/OG-Baklava/parse3MF
+- Parser architecture: https://github.com/OG-Baklava/parse3MF/blob/main/docs/3MF_PIPELINE_ARCHITECTURE.md
+- Exporter docs: https://github.com/OG-Baklava/parse3MF/blob/main/docs/EXPORTER.md
+
+## Supported slicers
+
+- Bambu Studio (multicolor, plates, paint data, export)
+- PrusaSlicer (multicolor, paint data, export)
+- Cura (multicolor, export)
+- Any slicer following the 3MF Core Specification
+
+## License
+
+MIT
