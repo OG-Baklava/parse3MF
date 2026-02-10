@@ -17,6 +17,8 @@
 
 export { parse3MF, ThreeMFParseError } from './parser'
 export { calculateVolume, calculateBoundingBox } from './analyzer'
+export { export3MF, download3MF } from './exporter'
+export type { Export3MFOptions } from './exporter'
 
 // Re-export all public types
 export type {

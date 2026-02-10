@@ -39,9 +39,11 @@
  * @packageDocumentation
  */
 
-// ─── Core (parser + types) ──────────────────────────────────────────────────
+// ─── Core (parser + types + exporter) ───────────────────────────────────────
 export { parse3MF, ThreeMFParseError } from './core/parser'
 export { calculateVolume, calculateBoundingBox } from './core/analyzer'
+export { export3MF, download3MF } from './core/exporter'
+export type { Export3MFOptions } from './core/exporter'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type {
@@ -69,6 +71,9 @@ export type { ColorPickerProps } from './react/ColorPicker'
 
 export { PlateSelector } from './react/PlateSelector'
 export type { PlateSelectorProps } from './react/PlateSelector'
+
+export { SaveButton } from './react/SaveButton'
+export type { SaveButtonProps } from './react/SaveButton'
 
 export { ThreeMFWorkbench } from './react/Workbench'
 

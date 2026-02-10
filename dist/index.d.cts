@@ -106,6 +106,10 @@ interface ThreeMFViewerProps {
     onPlateChange?: (plateId: number) => void;
     /** Called on parse error. */
     onError?: (error: Error) => void;
+    /** Called after a successful export/download. */
+    onExported?: (blob: Blob) => void;
+    /** Whether to show the save/download button. Default: true when model is loaded. */
+    showSaveButton?: boolean;
     /** CSS class name for the root container. */
     className?: string;
     /** Inline style for the root container. */
@@ -179,11 +183,80 @@ declare function calculateVolume(geometry: BufferGeometry): number;
  */
 declare function calculateBoundingBox(geometry: BufferGeometry): BoundingBox;
 
+/**
+ * 3MF Exporter — re-packages a .3MF file with **only** color values changed.
+ *
+ * ★ DESIGN PRINCIPLE: surgical, field-specific string replacements only.
+ *   No DOM parsing / re-serialization. No JSON parse / stringify.
+ *   Only the exact color hex values inside known color fields are touched.
+ *   Every other byte of the original file is preserved exactly as-is.
+ *   Safe for production 3D printing workflows.
+ *
+ * @packageDocumentation
+ */
+
+interface Export3MFOptions {
+    /**
+     * The original .3MF file. Used as the base — only color values are changed.
+     */
+    originalFile: File | Blob | ArrayBuffer;
+    /**
+     * The current material slots with the user's color selections.
+     */
+    materialSlots: MaterialSlot[];
+    /**
+     * Optional color options to resolve named colors to hex.
+     * Defaults to the built-in color map.
+     */
+    colorOptions?: ColorOption[];
+    /**
+     * Output filename (without extension). Default: original filename + "_modified".
+     */
+    filename?: string;
+}
+/**
+ * Export a modified `.3MF` file with **only** updated color values.
+ *
+ * Every byte of the original file is preserved except for the exact color
+ * hex strings inside known color fields. No XML re-serialization, no JSON
+ * reformatting. Safe for production 3D printing workflows.
+ *
+ * @example
+ * ```ts
+ * import { export3MF } from 'parse3mf/core'
+ *
+ * const blob = await export3MF({
+ *   originalFile: myFile,
+ *   materialSlots: updatedSlots,
+ * })
+ * ```
+ */
+declare function export3MF(options: Export3MFOptions): Promise<Blob>;
+/**
+ * Export a modified `.3MF` and trigger a browser download.
+ *
+ * @example
+ * ```ts
+ * import { download3MF } from 'parse3mf/core'
+ *
+ * await download3MF({
+ *   originalFile: myFile,
+ *   materialSlots: updatedSlots,
+ *   filename: 'my-model-recolored',
+ * })
+ * ```
+ */
+declare function download3MF(options: Export3MFOptions): Promise<void>;
+
 interface ThreeMFState {
     /** The parsed model data (null before first parse). */
     model: ParsedThreeMF | null;
+    /** The original file (kept for re-export). */
+    originalFile: File | null;
     /** Whether the parser is currently running. */
     loading: boolean;
+    /** Whether an export is currently running. */
+    exporting: boolean;
     /** Last parse error, if any. */
     error: Error | null;
     /** Currently selected plate ID. */
@@ -202,6 +275,12 @@ interface ThreeMFContextValue extends ThreeMFState {
     selectPlate: (plateId: number | null) => void;
     /** Set the single colour for non-multicolor models. */
     setColor: (color: string) => void;
+    /** Export the modified .3MF as a Blob. */
+    exportFile: (colorOptions?: ColorOption[]) => Promise<Blob | null>;
+    /** Export and trigger a browser download of the modified .3MF. */
+    downloadFile: (filename?: string, colorOptions?: ColorOption[]) => Promise<void>;
+    /** Whether the model has color changes compared to the original. */
+    hasColorChanges: boolean;
     /** Reset all state. */
     reset: () => void;
     isMultiColor: boolean;
@@ -222,8 +301,10 @@ interface ThreeMFProviderProps {
     onSlotColorChange?: (slotId: string, color: string, allSlots: MaterialSlot[]) => void;
     /** Called when the active plate changes. */
     onPlateChange?: (plateId: number) => void;
+    /** Called after a successful export/download. */
+    onExported?: (blob: Blob) => void;
 }
-declare function ThreeMFProvider({ children, onParsed, onError, onSlotColorChange, onPlateChange, }: ThreeMFProviderProps): react_jsx_runtime.JSX.Element;
+declare function ThreeMFProvider({ children, onParsed, onError, onSlotColorChange, onPlateChange, onExported, }: ThreeMFProviderProps): react_jsx_runtime.JSX.Element;
 /**
  * Access the 3MF viewer state and actions.
  *
@@ -290,8 +371,30 @@ interface PlateSelectorProps {
  */
 declare function PlateSelector({ theme: themeOverrides, className, style }: PlateSelectorProps): react_jsx_runtime.JSX.Element | null;
 
+interface SaveButtonProps {
+    /** Theme overrides. */
+    theme?: ViewerTheme;
+    /** Color options to resolve named colors. */
+    colorOptions?: ColorOption[];
+    /** Custom filename (without extension). */
+    filename?: string;
+    /** CSS class for the root element. */
+    className?: string;
+    /** Inline styles for the root element. */
+    style?: React.CSSProperties;
+}
 /**
- * All-in-one 3MF viewer: viewport + plate selector + colour picker.
+ * Save/download button for the modified 3MF file.
+ *
+ * Shows a download button that exports the current color selections
+ * back into the .3MF file.
+ *
+ * Must be used inside a `<ThreeMFProvider>`.
+ */
+declare function SaveButton({ theme: themeOverrides, colorOptions, filename, className, style, }: SaveButtonProps): react_jsx_runtime.JSX.Element | null;
+
+/**
+ * All-in-one 3MF viewer: viewport + plate selector + colour picker + save button.
  *
  * Wraps its own `<ThreeMFProvider>` — no extra setup needed.
  *
@@ -320,4 +423,4 @@ declare function colorToHex(v: string): number;
 /** CSS-safe hex for a named or hex colour. */
 declare function colorToCss(v: string): string;
 
-export { type BoundingBox, type ColorOption, ColorPicker, type ColorPickerProps, DEFAULT_COLOR_OPTIONS, DEFAULT_THEME, type MaterialSlot, type ParsedGeomObject, type ParsedThreeMF, type ParsedTriangle, type Plate, PlateSelector, type PlateSelectorProps, type ThreeMFContextValue, type ThreeMFMetadata, ThreeMFParseError, ThreeMFProvider, type ThreeMFProviderProps, type ThreeMFState, type ThreeMFViewerProps, ThreeMFWorkbench, Viewer, type ViewerProps, type ViewerTheme, calculateBoundingBox, calculateVolume, colorToCss, colorToHex, parse3MF, resolveTheme, useThreeMF };
+export { type BoundingBox, type ColorOption, ColorPicker, type ColorPickerProps, DEFAULT_COLOR_OPTIONS, DEFAULT_THEME, type Export3MFOptions, type MaterialSlot, type ParsedGeomObject, type ParsedThreeMF, type ParsedTriangle, type Plate, PlateSelector, type PlateSelectorProps, SaveButton, type SaveButtonProps, type ThreeMFContextValue, type ThreeMFMetadata, ThreeMFParseError, ThreeMFProvider, type ThreeMFProviderProps, type ThreeMFState, type ThreeMFViewerProps, ThreeMFWorkbench, Viewer, type ViewerProps, type ViewerTheme, calculateBoundingBox, calculateVolume, colorToCss, colorToHex, download3MF, export3MF, parse3MF, resolveTheme, useThreeMF };

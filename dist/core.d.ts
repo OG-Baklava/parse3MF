@@ -63,6 +63,11 @@ interface ParsedThreeMF {
     /** Composite object ID → array of child geometry object IDs. */
     compositeToGeometryMap?: Map<number, number[]>;
 }
+/** Named colour map: display name → hex value. */
+type ColorOption = {
+    name: string;
+    hex: string;
+};
 interface ParsedTriangle {
     v1: number;
     v2: number;
@@ -131,4 +136,69 @@ declare function calculateVolume(geometry: BufferGeometry): number;
  */
 declare function calculateBoundingBox(geometry: BufferGeometry): BoundingBox;
 
-export { type BoundingBox, type MaterialSlot, type ParsedGeomObject, type ParsedThreeMF, type ParsedTriangle, type Plate, type ThreeMFMetadata, ThreeMFParseError, calculateBoundingBox, calculateVolume, parse3MF };
+/**
+ * 3MF Exporter — re-packages a .3MF file with **only** color values changed.
+ *
+ * ★ DESIGN PRINCIPLE: surgical, field-specific string replacements only.
+ *   No DOM parsing / re-serialization. No JSON parse / stringify.
+ *   Only the exact color hex values inside known color fields are touched.
+ *   Every other byte of the original file is preserved exactly as-is.
+ *   Safe for production 3D printing workflows.
+ *
+ * @packageDocumentation
+ */
+
+interface Export3MFOptions {
+    /**
+     * The original .3MF file. Used as the base — only color values are changed.
+     */
+    originalFile: File | Blob | ArrayBuffer;
+    /**
+     * The current material slots with the user's color selections.
+     */
+    materialSlots: MaterialSlot[];
+    /**
+     * Optional color options to resolve named colors to hex.
+     * Defaults to the built-in color map.
+     */
+    colorOptions?: ColorOption[];
+    /**
+     * Output filename (without extension). Default: original filename + "_modified".
+     */
+    filename?: string;
+}
+/**
+ * Export a modified `.3MF` file with **only** updated color values.
+ *
+ * Every byte of the original file is preserved except for the exact color
+ * hex strings inside known color fields. No XML re-serialization, no JSON
+ * reformatting. Safe for production 3D printing workflows.
+ *
+ * @example
+ * ```ts
+ * import { export3MF } from 'parse3mf/core'
+ *
+ * const blob = await export3MF({
+ *   originalFile: myFile,
+ *   materialSlots: updatedSlots,
+ * })
+ * ```
+ */
+declare function export3MF(options: Export3MFOptions): Promise<Blob>;
+/**
+ * Export a modified `.3MF` and trigger a browser download.
+ *
+ * @example
+ * ```ts
+ * import { download3MF } from 'parse3mf/core'
+ *
+ * await download3MF({
+ *   originalFile: myFile,
+ *   materialSlots: updatedSlots,
+ *   filename: 'my-model-recolored',
+ * })
+ * ```
+ */
+declare function download3MF(options: Export3MFOptions): Promise<void>;
+
+export { type BoundingBox, type Export3MFOptions, type MaterialSlot, type ParsedGeomObject, type ParsedThreeMF, type ParsedTriangle, type Plate, type ThreeMFMetadata, ThreeMFParseError, calculateBoundingBox, calculateVolume, download3MF, export3MF, parse3MF };

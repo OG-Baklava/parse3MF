@@ -116,6 +116,10 @@ export interface ThreeMFViewerProps {
   onPlateChange?: (plateId: number) => void
   /** Called on parse error. */
   onError?: (error: Error) => void
+  /** Called after a successful export/download. */
+  onExported?: (blob: Blob) => void
+  /** Whether to show the save/download button. Default: true when model is loaded. */
+  showSaveButton?: boolean
   /** CSS class name for the root container. */
   className?: string
   /** Inline style for the root container. */

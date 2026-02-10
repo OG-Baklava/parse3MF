@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ThreeMFProvider, useThreeMF } from './context'
 import { Viewer } from './Viewer'
 import { ColorPicker } from './ColorPicker'
 import { PlateSelector } from './PlateSelector'
+import { SaveButton } from './SaveButton'
 import type { ThreeMFViewerProps } from '../core/types'
 import { resolveTheme } from '../styles/theme'
 
@@ -14,6 +15,7 @@ function WorkbenchInner({
   file,
   colorOptions,
   theme: themeOverrides,
+  showSaveButton = true,
   className,
   style,
 }: ThreeMFViewerProps) {
@@ -57,6 +59,7 @@ function WorkbenchInner({
         >
           <PlateSelector theme={themeOverrides} />
           <ColorPicker theme={themeOverrides} colorOptions={colorOptions} />
+          {showSaveButton && <SaveButton theme={themeOverrides} colorOptions={colorOptions} />}
         </div>
       )}
     </div>
@@ -68,7 +71,7 @@ function WorkbenchInner({
 // ---------------------------------------------------------------------------
 
 /**
- * All-in-one 3MF viewer: viewport + plate selector + colour picker.
+ * All-in-one 3MF viewer: viewport + plate selector + colour picker + save button.
  *
  * Wraps its own `<ThreeMFProvider>` — no extra setup needed.
  *
@@ -94,6 +97,7 @@ export function ThreeMFWorkbench(props: ThreeMFViewerProps) {
       onError={props.onError}
       onSlotColorChange={props.onSlotColorChange}
       onPlateChange={props.onPlateChange}
+      onExported={props.onExported}
     >
       <WorkbenchInner {...props} />
     </ThreeMFProvider>

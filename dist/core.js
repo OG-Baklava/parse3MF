@@ -870,7 +870,306 @@ async function parse3MF(file) {
     );
   }
 }
+var DEFAULT_COLOR_MAP = {
+  White: "#F1F5F9",
+  Black: "#1E293B",
+  Red: "#EF4444",
+  Blue: "#3B82F6",
+  Green: "#22C55E",
+  Yellow: "#EAB308",
+  Orange: "#F97316",
+  Grey: "#64748B",
+  Clear: "#E0F2FE"
+};
+function resolveToHex(color, colorOptions) {
+  if (color.startsWith("#")) {
+    let c = color.toUpperCase();
+    if (c.length === 4) c = `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
+    if (c.length === 9) c = c.substring(0, 7);
+    return c;
+  }
+  if (colorOptions) {
+    const opt = colorOptions.find((o) => o.name === color);
+    if (opt) return opt.hex.toUpperCase();
+  }
+  const hex = DEFAULT_COLOR_MAP[color];
+  return hex ? hex.toUpperCase() : "#808080";
+}
+function normalizeColor2(color) {
+  if (!color || color.trim() === "") return "#808080";
+  let c = color.trim();
+  if (!c.startsWith("#")) c = "#" + c;
+  if (c.length === 9) c = c.substring(0, 7);
+  return c.toUpperCase();
+}
+function hexPattern(hex6) {
+  const body = hex6.slice(1);
+  return new RegExp(
+    "#" + body + "([0-9a-fA-F]{2})?(?![0-9a-fA-F])",
+    "gi"
+  );
+}
+function replaceHex(text, oldHex, newHex) {
+  return text.replace(hexPattern(oldHex), (_match, alpha) => {
+    return newHex + (alpha || "");
+  });
+}
+async function extractConfigFilamentColors(zipContent) {
+  for (const path of ["Metadata/project_settings.config", "Metadata/Project_settings.config"]) {
+    const file = zipContent.file(path);
+    if (!file) continue;
+    try {
+      const content = await file.async("text");
+      const trimmed = content.trim();
+      if (trimmed.startsWith("{")) {
+        try {
+          const json = JSON.parse(trimmed);
+          const colorKey = Object.keys(json).find(
+            (k) => k.toLowerCase() === "filament_colour" || k.toLowerCase() === "filament_color"
+          );
+          if (colorKey) {
+            const val = json[colorKey];
+            if (Array.isArray(val)) {
+              return val.map((c) => normalizeColor2(String(c)));
+            }
+            if (typeof val === "string") {
+              return val.split(";").map((c) => c.trim()).filter((c) => c.length > 0).map((c) => normalizeColor2(c));
+            }
+          }
+        } catch {
+        }
+      }
+      const match = content.match(/filament_colou?r\s*=\s*(.+)/i);
+      if (match) {
+        return match[1].split(";").map((c) => c.trim()).filter((c) => c.length > 0).map((c) => normalizeColor2(c));
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+function extractXmlColorValues(xml) {
+  const colors = [];
+  const basePattern = /<base\b[^>]*?displaycolor\s*=\s*["']([^"']*?)["'][^>]*?>/gi;
+  let match;
+  while ((match = basePattern.exec(xml)) !== null) {
+    if (match[1]) colors.push(match[1]);
+  }
+  if (colors.length > 0) return colors;
+  const colorPattern = /<color\b[^>]*?\bcolor\s*=\s*["']([^"']*?)["'][^>]*?>/gi;
+  while ((match = colorPattern.exec(xml)) !== null) {
+    if (match[1]) colors.push(match[1]);
+  }
+  return colors;
+}
+function buildModelRemap(xml, primaryRemap, configColors, materialSlots, colorOptions) {
+  if (primaryRemap.size === 0) return primaryRemap;
+  const expanded = new Map(primaryRemap);
+  const xmlColors = extractXmlColorValues(xml);
+  if (xmlColors.length === 0 || configColors.length === 0) return expanded;
+  const len = Math.min(xmlColors.length, configColors.length);
+  for (let i = 0; i < len; i++) {
+    const xmlNorm = normalizeColor2(xmlColors[i]);
+    const cfgNorm = configColors[i];
+    const slot = materialSlots.find((s) => {
+      if (!s.id.startsWith("#")) return false;
+      const slotNorm2 = normalizeColor2(s.id);
+      return slotNorm2 === cfgNorm || slotNorm2 === xmlNorm;
+    });
+    if (!slot) continue;
+    const newHex = resolveToHex(slot.selectedColor, colorOptions);
+    const slotNorm = normalizeColor2(slot.id);
+    if (slotNorm === newHex) continue;
+    if (!expanded.has(xmlNorm)) {
+      expanded.set(xmlNorm, newHex);
+    }
+    if (!expanded.has(cfgNorm)) {
+      expanded.set(cfgNorm, newHex);
+    }
+  }
+  return expanded;
+}
+async function export3MF(options) {
+  const { originalFile, materialSlots, colorOptions } = options;
+  const arrayBuffer = originalFile instanceof ArrayBuffer ? originalFile : await originalFile.arrayBuffer();
+  const zip = new JSZip();
+  const zipContent = await zip.loadAsync(arrayBuffer);
+  const colorRemap = /* @__PURE__ */ new Map();
+  for (const slot of materialSlots) {
+    if (!slot.id.startsWith("#")) continue;
+    const originalNorm = normalizeColor2(slot.id);
+    const newHex = resolveToHex(slot.selectedColor, colorOptions);
+    if (originalNorm !== newHex) {
+      colorRemap.set(originalNorm, newHex);
+    }
+  }
+  if (colorRemap.size === 0) {
+    return new Blob([arrayBuffer], {
+      type: "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
+    });
+  }
+  const configColors = await extractConfigFilamentColors(zipContent);
+  let comprehensiveRemap = colorRemap;
+  const modelFiles = Object.keys(zipContent.files).filter(
+    (f) => f.endsWith(".model") && f.startsWith("3D/")
+  );
+  for (const modelPath of modelFiles) {
+    const modelFile = zipContent.file(modelPath);
+    if (!modelFile) continue;
+    const xml = await modelFile.async("text");
+    const modelRemap = buildModelRemap(xml, colorRemap, configColors, materialSlots, colorOptions);
+    if (modelRemap.size > colorRemap.size) {
+      comprehensiveRemap = new Map([...comprehensiveRemap, ...modelRemap]);
+    }
+    const patched = patchModelXmlColors(xml, modelRemap);
+    if (patched !== xml) {
+      zipContent.file(modelPath, patched);
+    }
+  }
+  for (const configPath of [
+    "Metadata/project_settings.config",
+    "Metadata/Project_settings.config"
+  ]) {
+    const configFile = zipContent.file(configPath);
+    if (!configFile) continue;
+    try {
+      const content = await configFile.async("text");
+      const patched = patchProjectSettingsColors(content, comprehensiveRemap);
+      if (patched !== content) {
+        zipContent.file(configPath, patched);
+      }
+    } catch {
+    }
+  }
+  const sliceInfoFile = zipContent.file("Metadata/slice_info.config");
+  if (sliceInfoFile) {
+    try {
+      const content = await sliceInfoFile.async("text");
+      const patched = patchSliceInfoColors(content, comprehensiveRemap);
+      if (patched !== content) {
+        zipContent.file("Metadata/slice_info.config", patched);
+      }
+    } catch {
+    }
+  }
+  const slicerConfigs = Object.keys(zipContent.files).filter(
+    (f) => f.includes("Slic3r") && f.endsWith(".config")
+  );
+  for (const configPath of slicerConfigs) {
+    const configFile = zipContent.file(configPath);
+    if (!configFile) continue;
+    try {
+      const content = await configFile.async("text");
+      const patched = patchPrusaSlicerColors(content, comprehensiveRemap);
+      if (patched !== content) {
+        zipContent.file(configPath, patched);
+      }
+    } catch {
+    }
+  }
+  const blob = await zipContent.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
+  });
+  return blob;
+}
+function patchModelXmlColors(xml, remap) {
+  if (remap.size === 0) return xml;
+  let result = xml;
+  result = patchAttrInTag(result, "base", "displaycolor", remap);
+  result = patchAttrInTag(result, "color", "color", remap);
+  return result;
+}
+function patchAttrInTag(xml, tagName, attrName, remap) {
+  const tagPattern = new RegExp(
+    `(<${tagName}\\b)([^>]*>)`,
+    "gi"
+  );
+  return xml.replace(tagPattern, (fullTag, tagOpen, rest) => {
+    const attrPattern = new RegExp(
+      `(\\b${attrName}\\s*=\\s*(["']))([^"']*?)(\\2)`,
+      "gi"
+    );
+    const newRest = rest.replace(attrPattern, (attrMatch, prefix, _quote, colorVal, closingQuote) => {
+      const normalized = normalizeColor2(colorVal);
+      const replacement = remap.get(normalized);
+      if (!replacement) return attrMatch;
+      const newVal = preserveAlpha(colorVal, replacement);
+      return prefix + newVal + closingQuote;
+    });
+    return tagOpen + newRest;
+  });
+}
+function preserveAlpha(originalVal, newHex) {
+  const trimmed = originalVal.trim();
+  const withHash = trimmed.startsWith("#") ? trimmed : "#" + trimmed;
+  if (withHash.length === 9) {
+    return newHex + withHash.slice(7);
+  }
+  return newHex;
+}
+function patchProjectSettingsColors(content, remap) {
+  if (remap.size === 0) return content;
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) {
+    return patchJsonFilamentColors(content, remap);
+  }
+  return patchIniColorLine(content, remap);
+}
+function patchJsonFilamentColors(content, remap) {
+  const pattern = /("filament_colou?r"\s*:\s*\[)([^\]]*?)(\])/gi;
+  return content.replace(pattern, (fullMatch, prefix, arrayContent, suffix) => {
+    let newContent = arrayContent;
+    for (const [oldHex, newHex] of remap) {
+      newContent = replaceHex(newContent, oldHex, newHex);
+    }
+    return prefix + newContent + suffix;
+  });
+}
+function patchIniColorLine(content, remap) {
+  return content.replace(
+    /^(filament_colou?r\s*=\s*)(.+)$/gim,
+    (_fullMatch, prefix, colorsLine) => {
+      let newLine = colorsLine;
+      for (const [oldHex, newHex] of remap) {
+        newLine = replaceHex(newLine, oldHex, newHex);
+      }
+      return prefix + newLine;
+    }
+  );
+}
+function patchSliceInfoColors(content, remap) {
+  if (remap.size === 0) return content;
+  return patchAttrInTag(content, "filament", "color", remap);
+}
+function patchPrusaSlicerColors(content, remap) {
+  if (remap.size === 0) return content;
+  return content.replace(
+    /^((?:extruder|filament)_colou?r\s*=\s*)(.+)$/gim,
+    (_fullMatch, prefix, colorsLine) => {
+      let newLine = colorsLine;
+      for (const [oldHex, newHex] of remap) {
+        newLine = replaceHex(newLine, oldHex, newHex);
+      }
+      return prefix + newLine;
+    }
+  );
+}
+async function download3MF(options) {
+  const blob = await export3MF(options);
+  const defaultName = options.originalFile instanceof File ? options.originalFile.name.replace(/\.3mf$/i, "") + "_modified" : "model_modified";
+  const filename = (options.filename || defaultName) + ".3mf";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
-export { ThreeMFParseError, calculateBoundingBox, calculateVolume, parse3MF };
+export { ThreeMFParseError, calculateBoundingBox, calculateVolume, download3MF, export3MF, parse3MF };
 //# sourceMappingURL=core.js.map
 //# sourceMappingURL=core.js.map

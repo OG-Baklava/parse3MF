@@ -1,0 +1,23 @@
+{
+  "name": "parse3mf-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.163.0",
+    "jszip": "^3.10.1",
+    "parse3mf": "file:.."
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.4.0",
+    "typescript": "^5.3.3"
+  }
+}
